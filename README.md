@@ -1,96 +1,96 @@
 # frizura
 
-Next-gen LLM orchestrator: time-travel debugging, smart cost routing, guaranteed schemas, self-healing, hybrid swarm.
+Next-gen LLM orchestrator: smart cost routing, guaranteed schema output, time-travel debugging, and local-first hybrid swarm.
 
 **Status:** Alpha · **Python:** 3.12+ · **License:** Apache 2.0
 
 ---
 
-## Содержание
+## Table of Contents
 
-- [Что это](#что-это)
-- [Возможности](#возможности)
-- [Установка](#установка)
-- [Быстрый старт](#быстрый-старт)
-- [Концепции](#концепции)
-  - [Task — одиночный вызов](#task--одиночный-вызов)
-  - [Pipeline — DAG шагов](#pipeline--dag-шагов)
-  - [Budget — бюджет](#budget--бюджет)
-  - [Smart Router — авторотинг](#smart-router--авторотинг)
-  - [Schema Guard — гарантия схемы](#schema-guard--гарантия-схемы)
+- [What is it](#what-is-it)
+- [Features](#features)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Concepts](#concepts)
+  - [Task — single call](#task--single-call)
+  - [Pipeline — DAG of steps](#pipeline--dag-of-steps)
+  - [Budget — cost control](#budget--cost-control)
+  - [Smart Router](#smart-router)
+  - [Schema Guard](#schema-guard)
   - [Time-Travel Debugging](#time-travel-debugging)
-  - [Hybrid Swarm — локальные модели](#hybrid-swarm--локальные-модели)
-- [Провайдеры и модели](#провайдеры-и-модели)
-- [Конфигурация](#конфигурация)
+  - [Hybrid Swarm — local models](#hybrid-swarm--local-models)
+- [Providers & Models](#providers--models)
+- [Configuration](#configuration)
 - [CLI](#cli)
-- [Примеры](#примеры)
-- [Архитектура](#архитектура)
-- [Разработка](#разработка)
+- [Examples](#examples)
+- [Architecture](#architecture)
+- [Development](#development)
 
 ---
 
-## Что это
+## What is it
 
-Frizura — Python-библиотека для оркестрации LLM-запросов. Она встаёт между вашим кодом и языковыми моделями и берёт на себя:
+Frizura is a Python library for orchestrating LLM calls. It sits between your code and language models and handles:
 
-- выбор модели по цене/качеству/скорости автоматически
-- гарантированный структурированный вывод через Pydantic
-- сохранение каждого шага для последующей отладки и replay
-- маршрутизацию чувствительных данных на локальные модели (Ollama)
-- контроль бюджета на уровне задачи, шага или пайплайна
+- automatic model selection by price, quality, and speed
+- guaranteed structured output via Pydantic with self-healing
+- recording every step for later debugging and replay
+- routing sensitive data to local models (Ollama)
+- budget enforcement at the task, step, or pipeline level
 
-Никакого внешнего сервиса не нужно — работает как обычная Python-библиотека. SQLite для хранения событий поднимается автоматически.
+No external services required — works as a plain Python library. SQLite for event storage is set up automatically.
 
 ---
 
-## Возможности
+## Features
 
-| Фича | Описание |
+| Feature | Description |
 |---|---|
-| `@frizura.task` | Декоратор — превращает функцию в LLM-задачу |
-| `Pipeline` + `Step` | DAG-builder: линейные, параллельные, условные шаги |
-| Smart Router | Выбирает модель по complexity score, бюджету и стратегии |
-| Cascade Routing | Пробует дешёвую модель сначала, эскалирует при неудаче |
-| Schema Guard | Валидирует вывод LLM через Pydantic, само-исцеляет до 3 раз |
-| Time-Travel | Каждый шаг → событие в SQLite, replay к любому шагу |
-| Hybrid Swarm | Локальные Ollama-модели + облачные API, PII-маскирование |
-| Budget Control | `Budget(max_cost=0.01)` — жёсткий лимит стоимости/времени |
-| Rich TUI | `frizura inspect` — красивый дебаггер в терминале |
+| `@frizura.task` | Decorator — turns any function into an LLM task |
+| `Pipeline` + `Step` | DAG builder: linear, parallel, and conditional steps |
+| Smart Router | Picks a model by complexity score, budget, and strategy |
+| Cascade Routing | Tries the cheapest model first, escalates on failure |
+| Schema Guard | Validates LLM output via Pydantic, self-heals up to 3 times |
+| Time-Travel | Every step → event in SQLite, replay to any point |
+| Hybrid Swarm | Local Ollama models + cloud APIs, PII masking |
+| Budget Control | `Budget(max_cost=0.01)` — hard cap on cost and time |
+| Rich TUI | `frizura inspect` — beautiful terminal debugger |
 
 ---
 
-## Установка
+## Installation
 
 ```bash
-# Полная установка (все провайдеры + CLI)
+# Full install (all providers + CLI)
 pip install frizura[all]
 
-# Только нужные провайдеры
+# Only the providers you need
 pip install frizura[anthropic]
 pip install frizura[google]
 pip install frizura[openai]
 pip install frizura[ollama]
 
-# Из исходников
-git clone <repo>
-cd orcestr
+# From source
+git clone https://github.com/Ripper-del/frizura.git
+cd frizura
 pip install -e ".[all]"
 ```
 
 ---
 
-## Быстрый старт
+## Quick Start
 
-**1. API-ключи** (env-переменные с префиксом `FRIZURA_`):
+**1. Set API keys** (env vars with `FRIZURA_` prefix):
 
 ```bash
 export FRIZURA_ANTHROPIC_API_KEY=sk-ant-...
 export FRIZURA_GOOGLE_API_KEY=AIza...
 export FRIZURA_OPENAI_API_KEY=sk-...
-# или в .env файле
+# or use a .env file (see .env.example)
 ```
 
-**2. Минимальный пример:**
+**2. Minimal example:**
 
 ```python
 import asyncio
@@ -98,13 +98,13 @@ import frizura
 
 @frizura.task(model="anthropic:claude-sonnet-4-6")
 async def explain(topic: str) -> str:
-    """Объясни простыми словами: {topic}"""
+    """Explain in simple terms: {topic}"""
 
-result = asyncio.run(explain("квантовая запутанность"))
+result = asyncio.run(explain("quantum entanglement"))
 print(result)
 ```
 
-**3. Со структурированным выводом:**
+**3. With structured output:**
 
 ```python
 from pydantic import BaseModel
@@ -121,44 +121,44 @@ class Review(BaseModel):
     budget=frizura.Budget(max_cost=0.01),
 )
 async def analyze(text: str) -> Review:
-    """Analyze review sentiment: {text}"""
+    """Analyze the sentiment of this review: {text}"""
 
-result = asyncio.run(analyze("Отличный фильм, рекомендую!"))
+result = asyncio.run(analyze("Great movie, highly recommend!"))
 print(result.sentiment, result.score)
 ```
 
 ---
 
-## Концепции
+## Concepts
 
-### Task — одиночный вызов
+### Task — single call
 
-`@frizura.task` — самый простой способ вызвать LLM. Под капотом создаёт Pipeline из одного шага.
+`@frizura.task` is the simplest way to call an LLM. Internally it creates a single-step Pipeline and runs it through the engine.
 
 ```python
 @frizura.task(
-    model="anthropic:claude-sonnet-4-6",  # явная модель или None (авто-роутинг)
-    output_schema=MyModel,                 # опционально — Pydantic-схема
-    budget=frizura.Budget(max_cost=0.05),  # опционально — лимит стоимости
+    model="anthropic:claude-sonnet-4-6",  # explicit model or None (auto-routing)
+    output_schema=MyModel,                 # optional — Pydantic schema
+    budget=frizura.Budget(max_cost=0.05),  # optional — cost limit
     privacy="auto",                        # "auto" | "local_only" | "cloud_only"
-    system_prompt="You are an expert.",    # опционально
+    system_prompt="You are an expert.",    # optional
 )
 async def my_task(arg: str) -> str:
-    """Prompt template with {arg} interpolation."""
+    """Prompt template with {arg} substituted from function arguments."""
 ```
 
-Промпт формируется из docstring — `{arg}` подставляется из аргументов функции.
+The prompt is built from the docstring — `{arg}` is filled in from the function's arguments automatically.
 
 ---
 
-### Pipeline — DAG шагов
+### Pipeline — DAG of steps
 
-Для сложных многошаговых задач:
+For complex multi-step tasks with dependencies between steps:
 
 ```python
 from frizura.core.graph import Pipeline, Step, StepType
 
-# Линейная цепочка
+# Linear chain
 pipeline = (
     Pipeline("my-pipeline")
     .add_step(Step(
@@ -167,19 +167,19 @@ pipeline = (
         handler=lambda ctx: ctx.get("input"),
     ))
     .add_step(Step(
-        name="review",
-        system_prompt="Review and improve.",
+        name="revise",
+        system_prompt="Improve the text.",
         handler=lambda ctx: f"Improve this: {ctx.get('draft')}",
     ))
 )
 
-# Параллельные шаги
+# Parallel steps (run concurrently)
 pipeline.add_parallel(
-    Step(name="translate-en", handler=lambda ctx: "Translate to EN"),
-    Step(name="translate-de", handler=lambda ctx: "Translate to DE"),
+    Step(name="translate-en", handler=lambda ctx: "Translate to English"),
+    Step(name="translate-de", handler=lambda ctx: "Translate to German"),
 )
 
-# Условный branch
+# Conditional branch
 pipeline.add_branch(
     condition_fn=lambda ctx: "formal" if ctx.get("is_business") else "casual",
     branches={
@@ -188,101 +188,106 @@ pipeline.add_branch(
     }
 )
 
-# Запуск
+# Run it
 engine = frizura.FrizuraEngine()
-result = await engine.run(pipeline, input_data="Исходный текст")
+result = await engine.run(pipeline, input_data="Source text")
+
 print(result.output)
-print(f"Стоимость: ${result.total_cost_usd:.5f}")
-print(f"Время: {result.total_duration_ms:.0f}ms")
+print(f"Cost: ${result.total_cost_usd:.5f}")
+print(f"Time: {result.total_duration_ms:.0f}ms")
+print(f"Pipeline ID: {result.pipeline_id}")
 ```
 
-#### Типы шагов (`StepType`)
+#### Step types
 
-| Тип | Описание |
+| Type | Description |
 |---|---|
-| `LLM` | Вызов языковой модели (по умолчанию) |
-| `TRANSFORM` | Кастомная Python-функция без LLM |
-| `PARALLEL` | Параллельное выполнение группы шагов |
-| `BRANCH` | Условный выбор ветки |
-| `HUMAN` | Заглушка для human-in-the-loop (pending) |
+| `LLM` | Language model call (default) |
+| `TRANSFORM` | Custom Python function, no LLM |
+| `PARALLEL` | Concurrent execution of multiple steps |
+| `BRANCH` | Conditional branch selection |
+| `HUMAN` | Human-in-the-loop pause point |
 
 ---
 
-### Budget — бюджет
+### Budget — cost control
 
-Контроль расходов на уровне задачи или пайплайна:
+Enforce spending limits at the task or pipeline level:
 
 ```python
 from frizura.models.budget import Budget
 
 budget = Budget(
-    max_cost=0.10,     # максимум $0.10
-    max_tokens=50000,  # максимум 50k токенов
-    max_time=30.0,     # максимум 30 секунд
-    max_retries=3,     # максимум 3 повтора (для schema healing)
-    prefer="cost",     # "cost" | "quality" | "speed" — влияет на стратегию
+    max_cost=0.10,     # hard cap at $0.10
+    max_tokens=50000,  # max 50k tokens
+    max_time=30.0,     # max 30 seconds
+    max_retries=3,     # max 3 retries (for schema healing)
+    prefer="cost",     # "cost" | "quality" | "speed" — influences routing strategy
 )
 
 result = await engine.run(pipeline, budget=budget)
 ```
 
-При превышении бюджета бросается `BudgetExhaustedError`.
+`BudgetExhaustedError` is raised if any limit is exceeded.
 
 ---
 
-### Smart Router — авторотинг
+### Smart Router
 
-Если `model=None`, роутер выбирает модель автоматически.
+When `model=None`, the router picks a model automatically.
 
-**Как работает:**
-1. Анализирует сложность запроса (`complexity score` от 0.0 до 1.0)
-2. Фильтрует модели по нужным capability (JSON mode, tool calling)
-3. Фильтрует по бюджету
-4. Применяет стратегию выбора
+**How it works:**
+1. Analyses request complexity — `complexity score` from 0.0 to 1.0
+2. Filters models by required capabilities (JSON mode, tool calling)
+3. Filters by remaining budget
+4. Applies the configured strategy
 
-**Стратегии:**
+**Strategies:**
 
-| Стратегия | Логика |
+| Strategy | Logic |
 |---|---|
-| `cascade` _(default)_ | Пробует дешёвую модель, эскалирует при ошибке |
-| `cheapest` | Всегда самая дешёвая из подходящих |
-| `fastest` | Минимальная задержка |
-| `best_quality` | Топовый тир (premium) |
+| `cascade` _(default)_ | Tries cheapest model first, escalates on failure |
+| `cheapest` | Always the cheapest suitable model |
+| `fastest` | Lowest latency |
+| `best_quality` | Premium tier only |
 
-**Тиры моделей:** `cheap` → `standard` → `premium`
+**Model tiers:** `cheap` → `standard` → `premium`
 
 ```python
-# Явно задать стратегию
-engine = frizura.FrizuraEngine(
-    config=frizura.FrizuraConfig(
-        router=RouterConfig(default_strategy="cheapest")
+from frizura.models.config import RouterConfig
+
+config = frizura.FrizuraConfig(
+    router=RouterConfig(
+        default_strategy="cheapest",
+        complexity_threshold_cheap=0.3,    # score < 0.3 → cheap tier
+        complexity_threshold_premium=0.7,  # score > 0.7 → premium tier
     )
 )
 ```
 
 ---
 
-### Schema Guard — гарантия схемы
+### Schema Guard
 
-Frizura гарантирует, что вывод LLM будет валидным Pydantic-объектом.
+Frizura guarantees that LLM output will always be a valid Pydantic object.
 
-**Процесс:**
-1. LLM возвращает текст
-2. Извлекаем JSON (в том числе из markdown-фенсов ` ```json ... ``` `)
-3. Валидируем через `Model.model_validate()`
-4. Если невалидно → healing loop: отправляем ошибку обратно в ту же модель с просьбой исправить
-5. До 3 попыток. Если все провалились → `SchemaHealingFailed`
+**Process:**
+1. LLM returns text
+2. JSON is extracted (including from markdown fences ` ```json ... ``` `)
+3. Validated via `Model.model_validate()`
+4. If invalid → healing loop: the error is sent back to the model with a fix request
+5. Up to 3 attempts. If all fail → `SchemaHealingFailed`
 
 ```python
 from pydantic import BaseModel
 
-class Output(BaseModel):
-    answer: str
+class Answer(BaseModel):
+    text: str
     confidence: float
     sources: list[str]
 
-@frizura.task(output_schema=Output)
-async def query(question: str) -> Output:
+@frizura.task(output_schema=Answer)
+async def query(question: str) -> Answer:
     """Answer this question with sources: {question}"""
 ```
 
@@ -290,62 +295,58 @@ async def query(question: str) -> Output:
 
 ### Time-Travel Debugging
 
-Каждый запуск сохраняет все события в SQLite (`.frizura/events.db`).
+Every run saves all events to SQLite (`.frizura/events.db`). You can inspect and replay any pipeline execution.
 
 ```bash
-# Просмотр выполнения пайплайна
+# Inspect pipeline execution in Rich TUI
 frizura inspect <pipeline-id>
 
-# Replay до определённого шага
+# Replay up to a specific step
 frizura replay <pipeline-id> --to step-name
 ```
 
-**Что показывает `frizura inspect`:**
-- Summary panel: ID, статус, стоимость, время, модели
-- Step timeline: таблица шагов с иконками, длительностью, стоимостью
-- Event tree: дерево событий сгруппированное по шагам
-- Cost breakdown: расходы по моделям и шагам
+**What `frizura inspect` shows:**
+- Summary panel: ID, status, cost, duration, models used
+- Step timeline: status icons, duration, cost, heal attempts, output preview
+- Event tree grouped by step
+- Cost breakdown by model and step
 
-**Типы событий:**
+**Event types:**
 
-| Событие | Когда |
+| Event | When |
 |---|---|
-| `pipeline.started / completed / failed` | Старт/финиш пайплайна |
-| `step.started / completed / failed / skipped` | Выполнение шага |
-| `llm.request / llm.response` | Вызов модели |
-| `routing.decision` | Выбор модели роутером |
-| `schema.validation.ok / failed` | Проверка схемы |
-| `schema.heal.attempt` | Попытка само-исцеления |
-| `state.snapshot` | Снимок состояния контекста |
-| `budget.exhausted` | Превышение бюджета |
+| `pipeline.started / completed / failed` | Pipeline lifecycle |
+| `step.started / completed / failed / skipped` | Step lifecycle |
+| `llm.request / llm.response` | LLM call |
+| `routing.decision` | Router chose a model |
+| `schema.validation.ok / failed` | Schema check |
+| `schema.heal.attempt` | Self-healing attempt |
+| `state.snapshot` | Context state snapshot |
+| `budget.exhausted` | Budget limit hit |
 
 ```python
-# Replay в коде
+# Replay in code
 engine = frizura.FrizuraEngine()
-result = await engine.run(pipeline, "input")
+result = await engine.run(pipeline, "input data")
 
-# Восстановить контекст к нужному шагу
+# Restore context to a specific step
 ctx = await engine.replay(result.pipeline_id, until_step="step-id")
 print(ctx.state)
 ```
 
 ---
 
-### Hybrid Swarm — локальные модели
+### Hybrid Swarm — local models
 
-Frizura поддерживает Ollama для запуска моделей локально. Роутер автоматически маршрутизирует на локальные модели когда:
-- задан `privacy="local_only"` или `privacy="auto"` и данные чувствительные
-- бюджет ограничен и локальные модели дешевле
+Frizura supports Ollama for running models fully locally. The router automatically sends requests to local models when `privacy="local_only"` or when data is detected as sensitive.
 
 ```bash
-# Статус локального пула
+# Check local pool status
 frizura swarm status
 
-# Обнаружить модели в локальной сети
+# Discover models on the local network
 frizura swarm discover
 ```
-
-**Конфигурация Ollama:**
 
 ```python
 from frizura.models.config import SwarmConfig
@@ -353,64 +354,64 @@ from frizura.models.config import SwarmConfig
 config = frizura.FrizuraConfig(
     swarm=SwarmConfig(
         enabled=True,
-        local_first=True,                              # предпочитать локальные
-        ollama_hosts=["http://localhost:11434"],        # хосты Ollama
-        privacy_mode="auto",                           # "auto" | "local_only" | "cloud_only"
+        local_first=True,                          # prefer local models
+        ollama_hosts=["http://localhost:11434"],    # Ollama hosts
+        privacy_mode="auto",                       # "auto" | "local_only" | "cloud_only"
     )
 )
 ```
 
 ---
 
-## Провайдеры и модели
+## Providers & Models
 
-### Поддерживаемые провайдеры
+### Supported providers
 
-| Провайдер | Пакет | Ключ |
+| Provider | Package | Env variable |
 |---|---|---|
 | OpenAI | `frizura[openai]` | `FRIZURA_OPENAI_API_KEY` |
 | Anthropic | `frizura[anthropic]` | `FRIZURA_ANTHROPIC_API_KEY` |
 | Google | `frizura[google]` | `FRIZURA_GOOGLE_API_KEY` |
-| Ollama | `frizura[ollama]` | — (локально) |
+| Ollama | `frizura[ollama]` | — (local, no key needed) |
 
-### Формат модели
+### Model format
 
-Модель задаётся строкой `"provider:model_id"`:
+Models are specified as `"provider:model_id"`:
 
-```python
-"openai:gpt-4o"
-"openai:gpt-4o-mini"
-"anthropic:claude-sonnet-4-6"
-"anthropic:claude-opus-4-6"
-"google:gemini-2.0-flash"
-"google:gemini-2.5-pro"
-"ollama:llama3.3"
-"ollama:mistral"
-"ollama:phi4"
-"ollama:qwen2.5"
+```
+openai:gpt-4o
+openai:gpt-4o-mini
+anthropic:claude-sonnet-4-6
+anthropic:claude-opus-4-6
+google:gemini-2.0-flash
+google:gemini-2.5-pro
+ollama:llama3.3
+ollama:mistral
+ollama:phi4
+ollama:qwen2.5
 ```
 
 ---
 
-## Конфигурация
+## Configuration
 
-Все настройки через переменные окружения с префиксом `FRIZURA_` или `.env` файл.
+All settings via environment variables with the `FRIZURA_` prefix or a `.env` file in the project root.
 
 ```env
-# Провайдеры
+# Providers (at least one required)
 FRIZURA_OPENAI_API_KEY=sk-...
 FRIZURA_ANTHROPIC_API_KEY=sk-ant-...
 FRIZURA_GOOGLE_API_KEY=AIza...
 
-# Дефолтная модель (если model=None в task/step)
+# Default model (used when model=None in task/step)
 FRIZURA_DEFAULT_MODEL=anthropic:claude-sonnet-4-6
 
-# Логирование
+# Logging
 FRIZURA_LOG_LEVEL=INFO
 FRIZURA_VERBOSE=false
 ```
 
-Или через объект конфига:
+Or via config object in code:
 
 ```python
 from frizura.models.config import FrizuraConfig, RouterConfig, SwarmConfig, TimeTravelConfig
@@ -420,8 +421,8 @@ config = FrizuraConfig(
     log_level="DEBUG",
     router=RouterConfig(
         default_strategy="cascade",
-        complexity_threshold_cheap=0.3,    # score < 0.3 → cheap тир
-        complexity_threshold_premium=0.7,  # score > 0.7 → premium тир
+        complexity_threshold_cheap=0.3,
+        complexity_threshold_premium=0.7,
     ),
     swarm=SwarmConfig(
         local_first=True,
@@ -442,28 +443,28 @@ engine = frizura.FrizuraEngine(config=config)
 ## CLI
 
 ```bash
-# Запустить пайплайн из Python-файла
-frizura run examples/03_pipeline.py
+# Run a pipeline from a Python file
+frizura run my_pipeline.py
 frizura run my_pipeline.py --budget-cost 0.10 --budget-time 60
 
-# Time-travel дебаггер
+# Time-travel debugger — Rich TUI in terminal
 frizura inspect <pipeline-id>
 
-# Replay до конкретного шага
+# Replay to a specific step
 frizura replay <pipeline-id> --to <step-id>
 
-# Локальный пул моделей
+# Manage local model pool
 frizura swarm status
 frizura swarm discover
 ```
 
-`frizura run` ищет объект `Pipeline` в указанном файле и запускает его.
+`frizura run` looks for a `Pipeline` object in the given file and runs it through `FrizuraEngine`.
 
 ---
 
-## Примеры
+## Examples
 
-### Простая задача с авто-роутингом
+### Single task with auto-routing
 
 ```python
 import frizura
@@ -475,7 +476,7 @@ async def summarize(text: str) -> str:
 result = await summarize(long_article)
 ```
 
-### Структурированный вывод
+### Structured output with self-healing
 
 ```python
 from pydantic import BaseModel
@@ -484,7 +485,7 @@ import frizura
 class CodeReview(BaseModel):
     issues: list[str]
     suggestions: list[str]
-    score: int  # 1-10
+    score: int  # 1–10
 
 @frizura.task(model="anthropic:claude-sonnet-4-6", output_schema=CodeReview)
 async def review_code(code: str) -> CodeReview:
@@ -495,43 +496,41 @@ print(f"Score: {review.score}/10")
 print(f"Issues: {review.issues}")
 ```
 
-### Многошаговый пайплайн
+### Multi-step pipeline
 
 ```python
 from frizura.core.graph import Pipeline, Step
 
-async def main():
-    pipeline = (
-        Pipeline("article-pipeline")
-        .add_step(Step(
-            name="research",
-            system_prompt="You are a researcher.",
-            handler=lambda ctx: f"Research this topic: {ctx.get('input')}",
-        ))
-        .add_step(Step(
-            name="write",
-            system_prompt="You are a writer.",
-            handler=lambda ctx: f"Write an article based on: {ctx.get('research')}",
-        ))
-        .add_step(Step(
-            name="edit",
-            system_prompt="You are an editor.",
-            handler=lambda ctx: f"Edit and improve: {ctx.get('write')}",
-            model="anthropic:claude-opus-4-6",  # шаг с явной тяжёлой моделью
-        ))
-    )
+pipeline = (
+    Pipeline("article-pipeline")
+    .add_step(Step(
+        name="research",
+        system_prompt="You are a researcher.",
+        handler=lambda ctx: f"Research this topic: {ctx.get('input')}",
+    ))
+    .add_step(Step(
+        name="write",
+        system_prompt="You are a journalist.",
+        handler=lambda ctx: f"Write an article based on: {ctx.get('research')}",
+    ))
+    .add_step(Step(
+        name="edit",
+        system_prompt="You are an editor.",
+        handler=lambda ctx: f"Edit and improve: {ctx.get('write')}",
+        model="anthropic:claude-opus-4-6",
+    ))
+)
 
-    engine = frizura.FrizuraEngine()
-    result = await engine.run(pipeline, "quantum computing for beginners")
+engine = frizura.FrizuraEngine()
+result = await engine.run(pipeline, "quantum computing for beginners")
 
-    print(result.output)
-    print(f"Шаги: {len(result.steps)}")
-    print(f"Стоимость: ${result.total_cost_usd:.4f}")
-    print(f"Pipeline ID: {result.pipeline_id}")
-    # frizura inspect <pipeline_id>  ← для дебаггинга
+print(result.output)
+print(f"Steps: {len(result.steps)}")
+print(f"Total cost: ${result.total_cost_usd:.4f}")
+# frizura inspect <result.pipeline_id>
 ```
 
-### Параллельные шаги
+### Parallel translation
 
 ```python
 pipeline = (
@@ -547,44 +546,45 @@ pipeline = (
 
 ---
 
-## Архитектура
+## Architecture
 
 ```
-frizura/
+src/frizura/
 ├── core/
-│   ├── engine.py       # FrizuraEngine — главный оркестратор
-│   ├── graph.py        # Pipeline, Step, DAG-компилятор (Kahn's алгоритм)
-│   ├── context.py      # ExecutionContext — состояние выполнения
-│   ├── decorators.py   # @task, @step декораторы
-│   └── events.py       # Типы событий
+│   ├── engine.py       # FrizuraEngine — main orchestrator
+│   ├── graph.py        # Pipeline, Step, DAG compiler (Kahn's algorithm)
+│   ├── context.py      # ExecutionContext — runtime state
+│   ├── decorators.py   # @task, @step
+│   └── events.py       # Event types
 ├── router/
-│   ├── router.py       # SmartRouter — выбор модели
-│   ├── analyzer.py     # ComplexityAnalyzer — оценка сложности запроса
-│   ├── calculator.py   # CostCalculator — расчёт стоимости
+│   ├── router.py       # SmartRouter — model selection
+│   ├── analyzer.py     # ComplexityAnalyzer — request complexity scoring
+│   ├── calculator.py   # CostCalculator — cost estimation
 │   └── strategies.py   # cascade, cheapest, fastest, best_quality
 ├── providers/
-│   ├── base.py         # LLMProvider — абстракция
+│   ├── base.py         # LLMProvider — abstract base class
 │   ├── anthropic.py    # Anthropic SDK
 │   ├── google.py       # Google GenAI
 │   ├── openai.py       # OpenAI SDK
-│   └── ollama.py       # Ollama (локальные модели)
+│   ├── ollama.py       # Ollama (local models)
+│   └── registry.py     # Provider registry
 ├── schema/
-│   ├── validator.py    # SchemaValidator
-│   └── healer.py       # SchemaHealer — само-исцеление
+│   ├── validator.py    # Schema validation
+│   └── healer.py       # Self-healing for invalid JSON
 ├── swarm/
-│   ├── gateway.py      # HybridGateway — local + cloud
-│   ├── pool.py         # LocalPool — Ollama-пул
-│   ├── classifier.py   # PrivacyClassifier
-│   └── masker.py       # PIIMasker — маскирование PII
+│   ├── gateway.py      # HybridGateway — local + cloud dispatch
+│   ├── pool.py         # LocalPool — Ollama pool
+│   ├── classifier.py   # Privacy classifier
+│   └── masker.py       # PII masking
 ├── timetravel/
 │   ├── store.py        # EventStore (SQLite)
-│   ├── snapshot.py     # StateSnapshot
+│   ├── snapshot.py     # State snapshots
 │   ├── replay.py       # ReplayEngine
-│   └── inspector.py    # Rich TUI инспектор
+│   └── inspector.py    # Rich TUI visualizer
 ├── optimizer/
-│   ├── collector.py    # Сбор обратной связи
-│   ├── evaluator.py    # Оценка вариантов промптов
-│   └── optimizer.py    # A/B тестирование промптов
+│   ├── collector.py    # Feedback collection
+│   ├── evaluator.py    # Prompt variant evaluation
+│   └── optimizer.py    # A/B prompt testing
 ├── models/
 │   ├── config.py       # FrizuraConfig (pydantic-settings)
 │   ├── budget.py       # Budget, BudgetConstraint
@@ -594,7 +594,7 @@ frizura/
     └── app.py          # Typer CLI
 ```
 
-### Поток выполнения
+### Request flow
 
 ```
 @task / engine.run()
@@ -602,22 +602,22 @@ frizura/
         ▼
   FrizuraEngine.run()
         │
-        ├─ Pipeline.compile()  ← DAG-валидация, топологическая сортировка
+        ├─ Pipeline.compile()      ← DAG validation, topological sort
         │
-        ├─ для каждой группы шагов:
-        │   ├─ [параллельные] asyncio.TaskGroup
+        ├─ for each step group:
+        │   ├─ [parallel] asyncio.TaskGroup
         │   └─ execute_step()
         │         │
-        │         ├─ SmartRouter.route()  ← если model не задан явно
+        │         ├─ SmartRouter.route()    ← if model not set explicitly
         │         │     ├─ ComplexityAnalyzer.analyze()
-        │         │     ├─ фильтр по capability + budget
+        │         │     ├─ filter by capability + budget
         │         │     └─ Strategy.select()
         │         │
         │         ├─ HybridGateway / Provider.complete()
         │         │
-        │         ├─ Schema validation + healing loop
+        │         ├─ Schema validation + healing loop (up to 3 attempts)
         │         │
-        │         ├─ EventStore.append()  ← SQLite
+        │         ├─ EventStore.append()   ← write to SQLite
         │         └─ StateSnapshot
         │
         └─ PipelineResult
@@ -625,31 +625,30 @@ frizura/
 
 ---
 
-## Разработка
+## Development
 
 ```bash
-# Установка с dev-зависимостями
+# Install with dev dependencies
 pip install -e ".[all]"
-pip install pytest pytest-asyncio ruff mypy
 
-# Тесты
+# Run tests
 pytest
 
-# Линтер
+# Lint
 ruff check src/
 
-# Типизация
+# Type check
 mypy src/frizura/
 ```
 
-### Структура тестов
+### Test structure
 
 ```
 tests/
 ├── conftest.py
-├── test_engine.py      # FrizuraEngine — основные сценарии
-├── test_router.py      # SmartRouter — стратегии, фильтрация
-├── test_schema.py      # Schema Guard — валидация, healing
-├── test_swarm.py       # Hybrid Swarm — local/cloud маршрутизация
+├── test_engine.py      # FrizuraEngine — core scenarios
+├── test_router.py      # SmartRouter — strategies, filtering
+├── test_schema.py      # Schema Guard — validation, self-healing
+├── test_swarm.py       # Hybrid Swarm — local/cloud routing
 └── test_timetravel.py  # EventStore, ReplayEngine, Inspector
 ```
